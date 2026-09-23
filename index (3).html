@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14121c">
+<title>Zuckoff – Smart glasses detector</title>
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#f4f2f8; --surface:#ffffff; --line:#d9d4e6; --text:#1d1830; --muted:#6a6383;
+  --calm:#5b5bd6; --alert:#c25a00; --alert-bg:#fff1e0; --ok:#2a7d5f;
+  --radar-bg:#ebe8f5;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#14121c; --surface:#1e1a2b; --line:#372f4d; --text:#ece8f5; --muted:#a49cbc;
+    --calm:#8f8fff; --alert:#ffb648; --alert-bg:#3a2a12; --ok:#5fd0a5; --radar-bg:#181425;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14121c; --surface:#1e1a2b; --line:#372f4d; --text:#ece8f5; --muted:#a49cbc;
+  --calm:#8f8fff; --alert:#ffb648; --alert-bg:#3a2a12; --ok:#5fd0a5; --radar-bg:#181425;
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{font-family:"Avenir Next","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;line-height:1.45;-webkit-font-smoothing:antialiased}
+main{max-width:520px;margin:0 auto;padding:16px 16px 40px}
+h1{font-size:1.5rem;margin:0;letter-spacing:-.02em;font-weight:750}
+h2{font-size:1rem;margin:0 0 8px;font-weight:650}
+p{margin:0}
+.muted{color:var(--muted)}
+.small{font-size:.82rem}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.tag{font-size:.8rem;color:var(--muted)}
+.icon-btn{background:none;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:8px 10px;font:inherit;font-size:.85rem;cursor:pointer}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--calm);outline-offset:2px}
+
+/* Status banner */
+.status{border:1.5px solid var(--line);background:var(--surface);border-radius:16px;padding:14px 16px;margin-bottom:14px;transition:background .25s,border-color .25s}
+.status .big{font-size:1.25rem;font-weight:700;letter-spacing:-.01em}
+.status.alert{background:var(--alert-bg);border-color:var(--alert)}
+.status.alert .big{color:var(--alert)}
+.status.scanning .big{color:var(--calm)}
+
+/* Radar */
+.radar-wrap{background:var(--radar-bg);border:1px solid var(--line);border-radius:22px;padding:10px;margin-bottom:14px}
+svg#radar{display:block;width:100%;height:auto}
+.ring{fill:none;stroke:var(--line);stroke-width:1}
+.ring-label{fill:var(--muted);font-size:10px}
+.sweep{transform-origin:150px 150px;animation:spin 3.2s linear infinite}
+.paused .sweep{animation:none;opacity:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.sweep{animation:none;opacity:0}.pulse{animation:none!important}}
+.blip{fill:var(--alert)}
+.blip-other{fill:var(--muted);opacity:.6}
+.pulse{transform-box:fill-box;transform-origin:center;animation:pulse 1.6s ease-out infinite}
+@keyframes pulse{0%{transform:scale(1);opacity:.7}100%{transform:scale(3);opacity:0}}
+.me{fill:var(--calm)}
+
+/* Controls */
+.controls{display:flex;gap:10px;margin-bottom:14px}
+.btn{flex:1;font:inherit;font-weight:650;border-radius:14px;padding:14px 16px;border:1.5px solid var(--calm);background:var(--calm);color:#fff;cursor:pointer;min-height:48px}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn.primary{color:#14121c}}
+:root[data-theme="dark"] .btn.primary{color:#14121c}
+.btn.secondary{background:transparent;color:var(--text);border-color:var(--line)}
+.btn.stop{background:transparent;color:var(--alert);border-color:var(--alert)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+
+/* Device list */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin-bottom:14px}
+.dev{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:12px 0;border-top:1px solid var(--line)}
+.dev:first-of-type{border-top:0;padding-top:2px}
+.dev .name{font-weight:650}
+.dev .dist{font-weight:750;font-size:1.15rem;text-align:right;font-variant-numeric:tabular-nums}
+.dev .why{grid-column:1/-1;color:var(--muted);font-size:.8rem}
+.chip{display:inline-block;font-size:.72rem;font-weight:650;border-radius:999px;padding:2px 8px;margin-left:6px;vertical-align:1px}
+.chip.high{background:var(--alert);color:#fff}
+.chip.med{border:1px solid var(--alert);color:var(--alert)}
+.chip.low{border:1px solid var(--line);color:var(--muted)}
+.empty{color:var(--muted);font-size:.92rem}
+
+/* Settings */
+details{margin-bottom:14px}
+details.card summary{cursor:pointer;font-weight:650}
+label.row{display:block;margin-top:14px;font-size:.9rem}
+label.row span.val{float:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--calm);margin-top:6px}
+.switch{display:flex;align-items:center;justify-content:space-between;margin-top:14px;font-size:.9rem}
+.switch input{width:22px;height:22px;accent-color:var(--calm)}
+.note{background:var(--surface);border:1px dashed var(--line);border-radius:14px;padding:12px 14px;font-size:.85rem;color:var(--muted)}
+.note strong{color:var(--text)}
+ol{margin:6px 0 0 18px;padding:0}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.85em;background:var(--radar-bg);padding:1px 5px;border-radius:5px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Zuckoff</h1>
+      <p class="tag">Find smart glasses near you</p>
+    </div>
+    <button class="icon-btn" id="themeBtn" aria-label="Switch light or dark theme">Theme</button>
+  </header>
+
+  <section class="status" id="status" aria-live="polite">
+    <div class="big" id="statusBig">Not scanning</div>
+    <p class="small muted" id="statusSub">Tap Start scan to look for nearby Bluetooth signals.</p>
+  </section>
+
+  <div class="radar-wrap" id="radarWrap">
+    <svg id="radar" viewBox="0 0 300 300" role="img" aria-label="Radar showing estimated distance of detected glasses">
+      <defs>
+        <radialGradient id="sweepGrad" cx="0" cy="0" r="1" gradientUnits="objectBoundingBox">
+          <stop offset="0" stop-color="var(--calm)" stop-opacity=".0"/>
+          <stop offset="1" stop-color="var(--calm)" stop-opacity=".35"/>
+        </radialGradient>
+      </defs>
+      <circle class="ring" cx="150" cy="150" r="140"/>
+      <circle class="ring" cx="150" cy="150" r="98"/>
+      <circle class="ring" cx="150" cy="150" r="62"/>
+      <circle class="ring" cx="150" cy="150" r="30"/>
+      <text class="ring-label" x="154" y="124">1 m</text>
+      <text class="ring-label" x="154" y="90">3 m</text>
+      <text class="ring-label" x="154" y="56">5 m</text>
+      <text class="ring-label" x="154" y="20">10 m</text>
+      <path class="sweep" d="M150 150 L150 10 A140 140 0 0 1 220 28.7 Z" fill="var(--calm)" opacity=".22"/>
+      <g id="blips"></g>
+      <circle class="me" cx="150" cy="150" r="5"/>
+    </svg>
+  </div>
+
+  <div class="controls">
+    <button class="btn primary" id="startBtn">Start scan</button>
+    <button class="btn secondary" id="demoBtn">Try demo</button>
+  </div>
+
+  <section class="card" aria-live="polite">
+    <h2>Detected glasses</h2>
+    <div id="list"><p class="empty">Nothing yet. Distances are rough estimates from signal strength.</p></div>
+    <p class="small muted" id="counts" style="margin-top:10px"></p>
+  </section>
+
+  <details class="card">
+    <summary>Settings</summary>
+    <label class="row">Signal at 1 metre <span class="val" id="txVal">-59 dBm</span>
+      <input type="range" id="tx" min="-80" max="-40" value="-59"></label>
+    <label class="row">Environment factor <span class="val" id="nVal">2.2</span>
+      <input type="range" id="n" min="15" max="40" value="22"></label>
+    <p class="small muted" style="margin-top:6px">Lower factor for open rooms, higher for crowded or indoor spaces.</p>
+    <label class="switch">Alert with vibration and beep <input type="checkbox" id="alertOn" checked></label>
+    <label class="switch">Include weak matches (device names only) <input type="checkbox" id="weakOn" checked></label>
+  </details>
+
+  <div class="note" id="support">
+    <strong>Limits.</strong> Zuckoff can tell that glasses may be nearby. It cannot tell whether they are recording, and it can miss glasses that are off, in a case, or not advertising. A match is a hint, not proof.
+  </div>
+  <div class="note" id="howto" style="margin-top:12px" hidden>
+    <strong>Live scanning needs one setting on Android Chrome.</strong>
+    <ol>
+      <li>Open <code>chrome://flags/#enable-experimental-web-platform-features</code></li>
+      <li>Set it to Enabled, then relaunch Chrome</li>
+      <li>Open this page directly in Chrome (not inside another app), turn Bluetooth and Location on, then tap Start scan</li>
+    </ol>
+    <p style="margin-top:8px">Until then, Try demo shows how the app behaves.</p>
+  </div>
+  <div class="note" id="diag" style="margin-top:12px">
+    <strong>Why live scan may be unavailable</strong>
+    <div id="diagList" style="margin-top:6px"></div>
+  </div>
+</main>
+
+<script>
+(function(){
+  // ---- Signatures -------------------------------------------------------
+  // Bluetooth SIG company identifiers and 16-bit service UUIDs associated with Meta / EssilorLuxottica.
+  // Treat these as starting points: they can be extended as you learn what real glasses broadcast.
+  var COMPANY_IDS = {0x01AB:'Meta Platforms', 0x058E:'Meta Platforms Technologies', 0x0D53:'Luxottica'};
+  var SERVICE_UUIDS = {0xFD5F:'Meta', 0xFEB7:'Meta (Facebook)', 0xFEB8:'Meta (Facebook)'};
+  var NAME_RE = /(ray[\s-]?ban|meta|oakley|rb\s?meta)/i;
+
+  var $ = function(id){return document.getElementById(id)};
+  var devices = {};          // id -> record
+  var totalSeen = {};        // id -> true (all BLE advertisers, for context)
+  var scanning = false, demoTimer = null, scanHandle = null, tickTimer = null;
+  var STALE_MS = 12000;
+  var audioCtx = null;
+
+  // ---- Theme ------------------------------------------------------------
+  $('themeBtn').addEventListener('click', function(){
+    var root = document.documentElement;
+    var dark = root.getAttribute('data-theme') === 'dark' ||
+      (!root.getAttribute('data-theme') && matchMedia('(prefers-color-scheme:dark)').matches);
+    root.setAttribute('data-theme', dark ? 'light' : 'dark');
+  });
+
+  // ---- Settings ---------------------------------------------------------
+  function cfg(){ return {tx:+$('tx').value, n:+$('n').value/10}; }
+  $('tx').addEventListener('input', function(){ $('txVal').textContent = this.value + ' dBm'; });
+  $('n').addEventListener('input', function(){ $('nVal').textContent = (this.value/10).toFixed(1); });
+
+  function estimateDistance(rssi){
+    var c = cfg();
+    var d = Math.pow(10, (c.tx - rssi) / (10 * c.n));
+    return Math.max(0.2, Math.min(d, 30));
+  }
+
+  // ---- Classification ---------------------------------------------------
+  function classify(ev){
+    var reasons = [], score = 0;
+    if (ev.manufacturerData){
+      ev.manufacturerData.forEach(function(_, id){
+        if (COMPANY_IDS[id]){ reasons.push('Maker ID: ' + COMPANY_IDS[id]); score += 3; }
+      });
+    }
+    (ev.uuids || []).forEach(function(u){
+      var short = parseInt(String(u).slice(4,8), 16);
+      var isBase = String(u).toLowerCase().indexOf('-0000-1000-8000-00805f9b34fb') > -1;
+      if (isBase && SERVICE_UUIDS[short]){ reasons.push('Service: ' + SERVICE_UUIDS[short]); score += 2; }
+    });
+    if (ev.serviceData){
+      ev.serviceData.forEach(function(_, u){
+        var short = parseInt(String(u).slice(4,8), 16);
+        if (SERVICE_UUIDS[short]){ reasons.push('Service data: ' + SERVICE_UUIDS[short]); score += 2; }
+      });
+    }
+    var name = ev.name || (ev.device && ev.device.name) || '';
+    if (name && NAME_RE.test(name)){ reasons.push('Name: ' + name); score += 1; }
+    var level = score >= 3 ? 'high' : score >= 2 ? 'med' : score >= 1 ? 'low' : null;
+    return {level:level, reasons:reasons, name:name};
+  }
+
+  // ---- Handling an advertisement ---------------------------------------
+  function onAdvert(ev){
+    var id = (ev.device && ev.device.id) || ev.id || 'unknown';
+    totalSeen[id] = true;
+    var cl = classify(ev);
+    if (!cl.level) return;
+    if (cl.level === 'low' && !$('weakOn').checked) return;
+    var now = Date.now();
+    var rec = devices[id];
+    var rssi = ev.rssi;
+    if (!rec){
+      rec = devices[id] = {id:id, rssi:rssi, first:now, angle:hashAngle(id), alerted:false};
+    } else {
+      rec.rssi = rec.rssi * 0.7 + rssi * 0.3;   // smooth jitter
+    }
+    rec.last = now; rec.level = cl.level; rec.reasons = cl.reasons; rec.name = cl.name || rec.name || 'Smart glasses';
+    if (!rec.alerted && (cl.level === 'high' || cl.level === 'med')){ rec.alerted = true; notify(); }
+  }
+  function hashAngle(s){
+    var h = 0; for (var i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) >>> 0; }
+    return (h % 360) * Math.PI / 180;
+  }
+
+  function notify(){
+    if (!$('alertOn').checked) return;
+    try{ if (navigator.vibrate) navigator.vibrate([200,100,200]); }catch(e){}
+    try{
+      audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.frequency.value = 880; g.gain.value = 0.06;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(); o.stop(audioCtx.currentTime + 0.18);
+    }catch(e){}
+  }
+
+  // ---- Rendering --------------------------------------------------------
+  function radius(d){            // metres -> px, compressed so 10 m fits
+    var r = 30 + (Math.log(d) / Math.log(10)) * 110;   // 1m->30? tuned below
+    // explicit anchors: 1m=30, 3m=62, 5m=98, 10m=140
+    var pts = [[0.2,10],[1,30],[3,62],[5,98],[10,140],[30,146]];
+    for (var i=0;i<pts.length-1;i++){
+      if (d <= pts[i+1][0]){
+        var t = (d - pts[i][0]) / (pts[i+1][0] - pts[i][0]);
+        return pts[i][1] + t * (pts[i+1][1] - pts[i][1]);
+      }
+    }
+    return 146;
+  }
+  function distText(d){ return d < 1 ? 'under 1 m' : '~' + (d < 10 ? d.toFixed(1) : Math.round(d)) + ' m'; }
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]}); }
+
+  function render(){
+    var now = Date.now();
+    Object.keys(devices).forEach(function(k){ if (now - devices[k].last > STALE_MS) delete devices[k]; });
+    var arr = Object.keys(devices).map(function(k){
+      var r = devices[k]; r.dist = estimateDistance(r.rssi); return r;
+    }).sort(function(a,b){ return a.dist - b.dist; });
+
+    var blips = '';
+    arr.forEach(function(r){
+      var rad = radius(r.dist), x = 150 + rad * Math.cos(r.angle - Math.PI/2), y = 150 + rad * Math.sin(r.angle - Math.PI/2);
+      var strong = r.level !== 'low';
+      blips += '<g>' + (strong ? '<circle class="blip pulse" cx="'+x+'" cy="'+y+'" r="6" opacity=".5"/>' : '') +
+        '<circle class="'+(strong?'blip':'blip-other')+'" cx="'+x+'" cy="'+y+'" r="6"/></g>';
+    });
+    $('blips').innerHTML = blips;
+
+    var list = $('list');
+    if (!arr.length){
+      list.innerHTML = '<p class="empty">' + (scanning ? 'No glasses found yet. Keep scanning.' : 'Nothing yet. Distances are rough estimates from signal strength.') + '</p>';
+    } else {
+      list.innerHTML = arr.map(function(r){
+        var label = r.level === 'high' ? 'Likely' : r.level === 'med' ? 'Possible' : 'Weak match';
+        return '<div class="dev"><div class="name">' + esc(r.name) + '<span class="chip ' + r.level + '">' + label + '</span></div>' +
+          '<div class="dist">' + distText(r.dist) + '</div>' +
+          '<div class="why">' + esc(r.reasons.join(' · ')) + ' · ' + Math.round(r.rssi) + ' dBm</div></div>';
+      }).join('');
+    }
+
+    var st = $('status'), big = $('statusBig'), sub = $('statusSub');
+    var strongOnes = arr.filter(function(r){ return r.level !== 'low'; });
+    st.className = 'status';
+    if (strongOnes.length){
+      st.classList.add('alert');
+      big.textContent = strongOnes.length === 1 ? 'Smart glasses nearby' : strongOnes.length + ' pairs of smart glasses nearby';
+      sub.textContent = 'Closest is ' + distText(strongOnes[0].dist) + '. We can’t tell if they are recording.';
+    } else if (scanning){
+      st.classList.add('scanning');
+      big.textContent = 'Scanning';
+      sub.textContent = arr.length ? 'Only weak matches so far.' : 'No smart glasses detected right now.';
+    } else {
+      big.textContent = 'Not scanning';
+      sub.textContent = 'Tap Start scan to look for nearby Bluetooth signals.';
+    }
+    $('counts').textContent = scanning ? Object.keys(totalSeen).length + ' Bluetooth devices seen in total' : '';
+    $('radarWrap').classList.toggle('paused', !scanning);
+  }
+
+  // ---- Live scanning (Web Bluetooth LE Scan) ---------------------------
+  function liveSupported(){ return !!(navigator.bluetooth && navigator.bluetooth.requestLEScan); }
+
+  async function startLive(){
+    try{
+      scanHandle = await navigator.bluetooth.requestLEScan({acceptAllAdvertisements:true, keepRepeatedDevices:true});
+      navigator.bluetooth.addEventListener('advertisementreceived', onAdvert);
+      scanning = true; setButtons();
+    }catch(e){
+      $('statusBig').textContent = 'Couldn’t start scanning';
+      $('statusSub').textContent = (e && e.message ? e.message : 'Permission was denied.') + ' Check Bluetooth and Location are on, then try again.';
+    }
+  }
+  function stopLive(){
+    try{ if (scanHandle && scanHandle.active) scanHandle.stop(); }catch(e){}
+    navigator.bluetooth && navigator.bluetooth.removeEventListener('advertisementreceived', onAdvert);
+    scanHandle = null;
+  }
+
+  // ---- Demo mode --------------------------------------------------------
+  var demoActors = [];
+  function startDemo(){
+    demoActors = [
+      {id:'demo-a', name:'Ray-Ban Meta (demo)', md:new Map([[0x01AB,{}]]), uuids:['0000fd5f-0000-1000-8000-00805f9b34fb'], base:-58, phase:0},
+      {id:'demo-b', name:'Meta glasses (demo)', md:new Map([[0x058E,{}]]), uuids:[], base:-74, phase:2},
+      {id:'demo-c', name:'Oakley (name only, demo)', md:null, uuids:[], base:-70, phase:4},
+      {id:'demo-x', name:'Headphones', md:null, uuids:[], base:-55, phase:1},
+      {id:'demo-y', name:'', md:null, uuids:[], base:-80, phase:3}
+    ];
+    var t0 = Date.now();
+    demoTimer = setInterval(function(){
+      var t = (Date.now() - t0) / 1000;
+      demoActors.forEach(function(a, i){
+        if (a.id === 'demo-b' && t < 6) return;              // second pair walks in after 6 s
+        var swing = Math.sin(t/3 + a.phase) * 9 + (Math.random()*4 - 2);
+        onAdvert({device:{id:a.id, name:a.name}, name:a.name, rssi:a.base + swing, manufacturerData:a.md, uuids:a.uuids});
+      });
+    }, 500);
+    scanning = true; setButtons();
+  }
+  function stopDemo(){ clearInterval(demoTimer); demoTimer = null; }
+
+  // ---- Buttons ----------------------------------------------------------
+  var mode = null;
+  function setButtons(){
+    var s = $('startBtn'), d = $('demoBtn');
+    if (scanning){
+      s.textContent = 'Stop'; s.className = 'btn stop'; d.disabled = true;
+    } else {
+      s.textContent = 'Start scan'; s.className = 'btn primary'; d.disabled = false;
+    }
+    d.textContent = 'Try demo';
+  }
+  function stopAll(){
+    if (mode === 'live') stopLive();
+    if (mode === 'demo') stopDemo();
+    scanning = false; mode = null; setButtons(); render();
+  }
+  $('startBtn').addEventListener('click', function(){
+    if (scanning){ stopAll(); return; }
+    devices = {}; totalSeen = {};
+    if (!liveSupported()){ $('howto').hidden = false; $('howto').scrollIntoView({behavior:'smooth', block:'center'}); return; }
+    mode = 'live'; startLive();
+  });
+  $('demoBtn').addEventListener('click', function(){
+    if (scanning) return;
+    devices = {}; totalSeen = {}; mode = 'demo'; startDemo();
+  });
+
+  // ---- Diagnostics ------------------------------------------------------
+  function diagnostics(){
+    var framed = false; try{ framed = window.top !== window.self; }catch(e){ framed = true; }
+    var rows = [
+      ['Secure (https) page', window.isSecureContext],
+      ['Opened directly, not inside another page', !framed],
+      ['Web Bluetooth available', !!navigator.bluetooth],
+      ['Bluetooth LE scan available', !!(navigator.bluetooth && navigator.bluetooth.requestLEScan)]
+    ];
+    var html = rows.map(function(r){ return '<div>' + (r[1] ? '✔' : '✘') + ' ' + r[0] + '</div>'; }).join('');
+    if (framed){
+      html += '<p style="margin-top:8px">This page is running inside a frame, and Chrome blocks Bluetooth there. Host the file on its own https address (see the steps I gave in chat) and open that address in Chrome.</p>';
+    } else if (navigator.bluetooth && !navigator.bluetooth.requestLEScan){
+      html += '<p style="margin-top:8px">Bluetooth is present but scanning is off. Enable the experimental flag and relaunch Chrome fully.</p>';
+    }
+    $('diagList').innerHTML = html;
+  }
+  diagnostics();
+
+  // ---- Init -------------------------------------------------------------
+  if (!liveSupported()){ $('howto').hidden = false; }
+  tickTimer = setInterval(render, 700);
+  render();
+})();
+</script>
+</body>
+</html>
