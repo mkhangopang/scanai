@@ -1,0 +1,2 @@
+# scanai
+scanai scans ai AR/VR ENABLED GLASSES RANGE OR NEARBY DEVICES
